@@ -172,6 +172,32 @@
         </section>
 
         <!-- Start Screen -->
+        <!-- Completed Screen (đã hoàn thành) -->
+        <section id="completedScreen" class="hidden">
+            <div class="glass-card rounded-3xl shadow-2xl overflow-hidden">
+                <div class="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-center">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-white/20 rounded-full mb-4">
+                        <span class="text-4xl">✅</span>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white mb-2">Bạn đã hoàn thành bài kiểm tra</h2>
+                    <p class="text-emerald-100">Mỗi học sinh chỉ được làm bài 1 lần</p>
+                </div>
+                <div class="p-8 text-center">
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                        <p class="text-blue-800 text-sm">
+                            📋 Kết quả của bạn đã được ghi nhận. Vui lòng liên hệ giáo viên nếu có thắc mắc.
+                        </p>
+                    </div>
+                    <div class="mt-6 flex gap-3 justify-center">
+                        <a href="https://zalo.me/0914666040"
+                            class="px-6 py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition-all">💬
+                            Liên hệ Zalo</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Start Screen -->
         <section id="startScreen" class="hidden">
             <div class="glass-card rounded-3xl shadow-2xl overflow-hidden">
                 <div class="gradient-bg p-8 text-center">
@@ -179,7 +205,7 @@
                         <span class="text-4xl">🎬</span>
                     </div>
                     <h2 class="text-2xl font-bold text-white mb-2">Sẵn sàng kiểm tra?</h2>
-                    <p class="text-indigo-100">20 câu hỏi • 15 phút</p>
+                    <p class="text-indigo-100">20 câu hỏi • Không giới hạn thời gian</p>
                 </div>
                 <div class="p-8">
                     <div class="grid grid-cols-3 gap-4 mb-6">
@@ -190,8 +216,8 @@
                         </div>
                         <div class="text-center p-4 bg-purple-50 rounded-2xl">
                             <div class="text-2xl mb-1">⏱️</div>
-                            <div class="text-2xl font-bold text-purple-600">15</div>
-                            <div class="text-xs text-gray-500">Phút</div>
+                            <div class="text-2xl font-bold text-purple-600">∞</div>
+                            <div class="text-xs text-gray-500">Không giới hạn</div>
                         </div>
                         <div class="text-center p-4 bg-pink-50 rounded-2xl">
                             <div class="text-2xl mb-1">🎯</div>
@@ -201,7 +227,8 @@
                     </div>
                     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
                         <p class="text-amber-800 text-sm">
-                            <span class="font-bold">⚠️ Lưu ý:</span> Bài kiểm tra sẽ tự động nộp khi hết thời gian. Đáp
+                            <span class="font-bold">⚠️ Lưu ý:</span> Bạn chỉ được làm bài kiểm tra <strong>1 lần duy
+                                nhất</strong>. Đáp
                             án sẽ được giáo viên thông báo sau.
                         </p>
                     </div>
@@ -387,14 +414,17 @@
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQIsxeBoo5-tdHisvppQMA9s9nhBKXmf2cQtVQV6m8hprlPNT9llimKgYFAvg3C5V38g/exec';
 
         // ===== 2. THỜI GIAN LÀM BÀI =====
-        const QUIZ_TIME = 15 * 60; // 15 phút
+        const QUIZ_TIME = 0; // 0 = không giới hạn thời gian
+        const TIMER_ENABLED = false; // Tắt timer
 
         // ===== 3. KHÓA THỜI GIAN LÀM BÀI =====
-        // Thời gian MỞ bài: 19:20 ngày 7/2/2026
+        const SCHEDULE_ENABLED = false; // Tắt schedule - Quiz mở mọi lúc
         const OPEN_TIME = new Date('2026-02-07T19:20:00+07:00');
-
-        // Thời gian ĐÓNG cổng vào: 19:35 ngày 7/2/2026 (sau 15 phút)
         const CLOSE_TIME = new Date('2026-02-07T19:35:00+07:00');
+
+        // ===== 4. CHỈ CHO LÀM 1 LẦN =====
+        const QUIZ_ID = 'quiz-unit8-films-v1'; // ID duy nhất cho quiz này
+        const ONE_TIME_ONLY = true; // Chỉ cho làm 1 lần
 
         // ===== 4. CÂU HỎI TRẮC NGHIỆM - UNIT 8: FILMS =====
         const quizData = [
@@ -536,6 +566,7 @@
         // ===== STATE =====
         let state = { name: '', className: '', parentPhone: '', current: 0, answers: {}, submitted: false };
         let timeLeft = QUIZ_TIME;
+        let startTime = null; // Thời điểm bắt đầu làm bài
         let timerInterval = null;
         let countdownInterval = null;
 
@@ -543,12 +574,18 @@
         const $ = id => document.getElementById(id);
         const lockedScreen = $('lockedScreen');
         const expiredScreen = $('expiredScreen');
+        const completedScreen = $('completedScreen');
         const startScreen = $('startScreen');
         const quizScreen = $('quizScreen');
         const resultScreen = $('resultScreen');
 
         // ===== INIT =====
         document.addEventListener('DOMContentLoaded', () => {
+            // Kiểm tra đã hoàn thành chưa
+            if (ONE_TIME_ONLY && checkCompleted()) {
+                showScreen('completed');
+                return;
+            }
             checkSchedule();
             $('studentForm').onsubmit = handleStart;
             $('prevBtn').onclick = () => navigate(-1);
@@ -556,8 +593,23 @@
             $('submitBtn').onclick = handleSubmit;
         });
 
+        // ===== CHECK COMPLETED (localStorage) =====
+        function checkCompleted() {
+            return localStorage.getItem(QUIZ_ID + '_completed') === 'true';
+        }
+
+        function markCompleted() {
+            localStorage.setItem(QUIZ_ID + '_completed', 'true');
+            localStorage.setItem(QUIZ_ID + '_completedAt', new Date().toISOString());
+        }
+
         // ===== SCHEDULE CHECK =====
         function checkSchedule() {
+            // Nếu schedule bị tắt, luôn hiển thị màn hình start
+            if (!SCHEDULE_ENABLED) {
+                showScreen('start');
+                return;
+            }
             const now = new Date();
             if (now < OPEN_TIME) { showScreen('locked'); startCountdown(); }
             else if (now > CLOSE_TIME) { showScreen('expired'); }
@@ -567,12 +619,14 @@
         function showScreen(screen) {
             lockedScreen.classList.add('hidden');
             expiredScreen.classList.add('hidden');
+            completedScreen.classList.add('hidden');
             startScreen.classList.add('hidden');
             quizScreen.classList.add('hidden');
             resultScreen.classList.add('hidden');
 
             if (screen === 'locked') lockedScreen.classList.remove('hidden');
             else if (screen === 'expired') expiredScreen.classList.remove('hidden');
+            else if (screen === 'completed') completedScreen.classList.remove('hidden');
             else if (screen === 'start') startScreen.classList.remove('hidden');
             else if (screen === 'quiz') quizScreen.classList.remove('hidden');
             else if (screen === 'result') resultScreen.classList.remove('hidden');
@@ -605,8 +659,11 @@
 
         function handleStart(e) {
             e.preventDefault();
-            const now = new Date();
-            if (now < OPEN_TIME || now > CLOSE_TIME) { checkSchedule(); return; }
+            // Kiểm tra schedule nếu được bật
+            if (SCHEDULE_ENABLED) {
+                const now = new Date();
+                if (now < OPEN_TIME || now > CLOSE_TIME) { checkSchedule(); return; }
+            }
 
             state.name = $('studentName').value.trim();
             state.className = $('studentClass').value.trim();
@@ -621,7 +678,14 @@
             $('dispClass').textContent = 'Lớp ' + state.className;
             initNav();
             render();
-            startTimer();
+            startTime = new Date(); // Ghi lại thời điểm bắt đầu
+            if (TIMER_ENABLED) {
+                startTimer();
+            } else {
+                // Hiển thị ∞ nếu không giới hạn thời gian
+                $('timerDisplay').textContent = '∞';
+                $('timerBar').style.width = '100%';
+            }
             showScreen('quiz');
         }
 
@@ -794,15 +858,53 @@
                 return;
             }
 
+            // Tính số câu đúng và tổng số câu
+            let correctCount = 0;
+            quizData.forEach((q, i) => { if (state.answers[i] === q.correct) correctCount++; });
+            const totalQuestions = quizData.length;
+
+            // Tính thời gian làm bài
+            let timeSpent = 0;
+            if (startTime) {
+                timeSpent = Math.floor((new Date() - startTime) / 1000);
+            } else if (TIMER_ENABLED) {
+                timeSpent = QUIZ_TIME - timeLeft;
+            }
+            const minutes = Math.floor(timeSpent / 60);
+            const seconds = timeSpent % 60;
+            const timeSpentStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            // Chi tiết đáp án
+            const answerDetails = quizData.map((q, i) => ({
+                question: i + 1,
+                userAnswer: q.options[state.answers[i]] || "Chưa trả lời",
+                correctAnswer: q.options[q.correct],
+                isCorrect: state.answers[i] === q.correct
+            }));
+
             try {
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, className, parentPhone, score })
+                    body: JSON.stringify({
+                        name,
+                        className,
+                        parentPhone,
+                        score,
+                        correctCount,
+                        totalQuestions,
+                        timeSpent: timeSpentStr,
+                        details: JSON.stringify(answerDetails)
+                    })
                 });
                 status.textContent = '✅ Đã lưu kết quả thành công!';
                 status.className = 'text-center mb-4 py-2 px-4 rounded-lg text-sm font-medium bg-emerald-100 text-emerald-700';
+
+                // Đánh dấu đã hoàn thành
+                if (ONE_TIME_ONLY) {
+                    markCompleted();
+                }
             } catch (e) {
                 status.textContent = '⚠️ Không thể lưu kết quả';
                 status.className = 'text-center mb-4 py-2 px-4 rounded-lg text-sm font-medium bg-amber-100 text-amber-700';
